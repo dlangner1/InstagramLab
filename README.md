@@ -1,4 +1,4 @@
-# Project 1 - *Name of App Here*
+# Lab 1 - Instagram
 
 Instagram is a movies app using the [The Instagram API](https://api.instagram.com).
 
