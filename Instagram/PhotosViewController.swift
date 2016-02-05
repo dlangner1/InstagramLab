@@ -9,11 +9,17 @@
 import UIKit
 import AFNetworking
 
-class PhotosViewController: UIViewController, UITableViewDataSource, UITableViewDelegate{
+class PhotosViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UIScrollViewDelegate {
     
     @IBOutlet weak var tableView: UITableView!
     
+    var refreshControl: UIRefreshControl!
+
     var instaPosts: [NSDictionary]?
+    
+    var isMoreDataLoading = false
+    var loadingMoreView: InfiniteScrollAcvtivityView?
+
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,11 +30,21 @@ class PhotosViewController: UIViewController, UITableViewDataSource, UITableView
         tableView.delegate = self
         
         self.fetchInstagramData()
-        
-        
-        
+        self.loadingImageImage()
+        self.controlRefresh()
+
     }
     
+    
+    // controlls the pull down refresh option
+    func controlRefresh() {
+    
+        self.refreshControl = UIRefreshControl()
+        self.refreshControl.addTarget(self, action: "refreshControlAction:", forControlEvents: UIControlEvents.ValueChanged)
+        self.tableView.insertSubview(refreshControl, atIndex: 0)
+    
+    }
+
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -46,15 +62,24 @@ class PhotosViewController: UIViewController, UITableViewDataSource, UITableView
         
         let task : NSURLSessionDataTask = session.dataTaskWithRequest(request,
             completionHandler: { (dataOrNil, response, error) in
+                                
                 if let data = dataOrNil {
                     if let responseDictionary = try! NSJSONSerialization.JSONObjectWithData(
                         data, options:[]) as? NSDictionary {
                             NSLog("response: \(responseDictionary)")
                             
                             self.instaPosts = responseDictionary["data"] as? [NSDictionary]
+                            
+                            // Update flag
+                            self.isMoreDataLoading = false
+                            
+                            // Stop the loading indicator
+                            self.loadingMoreView!.stopAnimating()
+
                     }
                 }
                 self.tableView.reloadData()
+                self.refreshControl.endRefreshing()
                 
         });
         task.resume()
@@ -62,6 +87,40 @@ class PhotosViewController: UIViewController, UITableViewDataSource, UITableView
         
     }
     
+    func loadingImageImage() {
+        let frame = CGRectMake(0, tableView.contentSize.height, tableView.bounds.size.width, InfiniteScrollAcvtivityView.defaultHeight)
+        loadingMoreView = InfiniteScrollAcvtivityView(frame: frame)
+        loadingMoreView!.hidden = true
+        tableView.addSubview(loadingMoreView!)
+        
+        var insets = tableView.contentInset;
+        insets.bottom += InfiniteScrollAcvtivityView.defaultHeight;
+        tableView.contentInset = insets
+    
+    
+    }
+    
+    func scrollViewDidScroll(scrollView: UIScrollView) {
+        if (!isMoreDataLoading) {
+            isMoreDataLoading = true
+        }
+        // Calculate the position of one screen length before the bottom of the results
+        let scrollViewContentHeight = tableView.contentSize.height
+        let scrollOffsetThreshold = scrollViewContentHeight - tableView.bounds.size.height
+        
+        // When the user has scrolled past the threshold, start requesting
+        if(scrollView.contentOffset.y > scrollOffsetThreshold && tableView.dragging) {
+            isMoreDataLoading = true
+            
+            // Update position of loadingMoreView, and start loading indicator
+            let frame = CGRectMake(0, tableView.contentSize.height, tableView.bounds.size.width, InfiniteScrollAcvtivityView.defaultHeight)
+            loadingMoreView?.frame = frame
+            loadingMoreView!.startAnimating()
+            
+            fetchInstagramData()
+        }
+    }
+
     func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         
         if let instaPosts = instaPosts {
@@ -77,6 +136,7 @@ class PhotosViewController: UIViewController, UITableViewDataSource, UITableView
     func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell {
         
         let cell = tableView.dequeueReusableCellWithIdentifier("InstaCell", forIndexPath: indexPath) as! InstaCell
+        
         let igPost = instaPosts![indexPath.row]
         
         if let imagePath = igPost.valueForKeyPath("images.low_resolution.url") as? String {
@@ -103,15 +163,19 @@ class PhotosViewController: UIViewController, UITableViewDataSource, UITableView
         return cell
     }
     
+    func tableView(tableView: UITableView, didSelectRowAtIndexPath indexPath: NSIndexPath)  {
+        tableView.deselectRowAtIndexPath(indexPath, animated:true)
+    }
+
+    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+
+        let indexPath = tableView.indexPathForCell(sender as! UITableViewCell)
+        let posts = instaPosts![indexPath!.row]
+        let vc = segue.destinationViewController as! PhotoDetailsViewController
+        vc.instagramPosts = posts
+        
+    }
+
 }
 
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
-        // Get the new view controller using segue.destinationViewController.
-        // Pass the selected object to the new view controller.
-    }
-    */
 
